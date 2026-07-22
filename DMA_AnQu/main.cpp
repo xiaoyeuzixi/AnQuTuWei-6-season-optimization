@@ -1,4 +1,5 @@
-﻿#include <cstdio>          // printf / getchar / fflush / stdin
+﻿#define _CRT_SECURE_NO_WARNINGS
+#include <cstdio>          // printf / getchar / fflush / stdin
 #include <cstdlib>         // exit
 #include <exception>
 #include <csignal>

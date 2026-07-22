@@ -1,14 +1,14 @@
-#pragma once
+﻿#pragma once
 /*
- * core/Decryption.h — FName 解密系统
+ * core/Decryption.h 鈥?FName 瑙ｅ瘑绯荤粺
  *
- * 从 main.h 抽离的 UE FName 解密逻辑:
- *   - INV_KEY[256]          GL(国际服) sub_143BA80D0 逆变换查找表
- *   - GetCachedNameKey()    thread_local 缓存的 NameKey (200 tick 刷新)
- *   - GetXorKey()           当前 XOR 密钥 (CN: 多轮位变换, GL: INV_KEY[stored])
- *   - FNameDecrypt()        原地解密 FName 字符串
+ * 浠?main.h 鎶界鐨?UE FName 瑙ｅ瘑閫昏緫:
+ *   - INV_KEY[256]          GL(鍥介檯鏈? sub_143BA80D0 閫嗗彉鎹㈡煡鎵捐〃
+ *   - GetCachedNameKey()    thread_local 缂撳瓨鐨?NameKey (200 tick 鍒锋柊)
+ *   - GetXorKey()           褰撳墠 XOR 瀵嗛挜 (CN: 澶氳疆浣嶅彉鎹? GL: INV_KEY[stored])
+ *   - FNameDecrypt()        鍘熷湴瑙ｅ瘑 FName 瀛楃涓?
  *
- * 依赖: Mem.h (mem), Offset.h (NameKey, BaseName), extern DWORD64 gs.base
+ * 渚濊禆: Mem.h (mem), Offset.h (NameKey, BaseName), extern DWORD64 gs.base
  */
 
 #include "Mem.h"
@@ -16,12 +16,12 @@
 #include <cstdint>
 #include <cstring>
 
-// 服务器版本标志 (extern, 由 main.h 定义)
+// 鏈嶅姟鍣ㄧ増鏈爣蹇?(extern, 鐢?main.h 瀹氫箟)
 extern bool g_IsGL;
 
-// GL(国际服) sub_143BA80D0 逆变换查找表
-// 游戏将原始密钥经 sub_143BA80D0 变换后存入 byte_14B49A94C
-// 解密时需逆变换还原原始密钥作为 XOR key
+// GL(鍥介檯鏈? sub_143BA80D0 閫嗗彉鎹㈡煡鎵捐〃
+// 娓告垙灏嗗師濮嬪瘑閽ョ粡 sub_143BA80D0 鍙樻崲鍚庡瓨鍏?byte_14B49A94C
+// 瑙ｅ瘑鏃堕渶閫嗗彉鎹㈣繕鍘熷師濮嬪瘑閽ヤ綔涓?XOR key
 inline const unsigned char INV_KEY[256] = {
     0x46, 0x47, 0x44, 0x45, 0x66, 0x67, 0x64, 0x65, 0x4E, 0x4F, 0x4C, 0x4D, 0x6E, 0x6F, 0x6C, 0x6D,
     0x56, 0x57, 0x54, 0x55, 0x76, 0x77, 0x74, 0x75, 0x5E, 0x5F, 0x5C, 0x5D, 0x7E, 0x7F, 0x7C, 0x7D,
@@ -43,9 +43,9 @@ inline const unsigned char INV_KEY[256] = {
 
 
 
-// ── 名字解密参数缓存 ──
-// CN(国服): IDA sub_143AB2870 逆向确认的多轮位变换 (非简单 XOR 0x46)
-// GL(国际服): xorKey = INV_KEY[storedKey]
+// 鈹€鈹€ 鍚嶅瓧瑙ｅ瘑鍙傛暟缂撳瓨 鈹€鈹€
+// CN(鍥芥湇): IDA sub_143AB2870 閫嗗悜纭鐨勫杞綅鍙樻崲 (闈炵畝鍗?XOR 0x46)
+// GL(鍥介檯鏈?: xorKey = INV_KEY[storedKey]
 inline unsigned char GetCachedNameKey() {
     thread_local unsigned char cachedKey = 0;
     thread_local int tickCount = 0;
@@ -61,11 +61,12 @@ inline unsigned char GetCachedNameKey() {
 inline unsigned char GetXorKey() {
     unsigned char stored = GetCachedNameKey();
     if (g_IsGL) return INV_KEY[stored];
-    // CN: IDA sub_143AB2870 逆向 — 两轮位运算后 XOR 0x46 掩码
-    // stored=0x56 → t1=0x56 → v4=0x76 → 0x76^0x42=0x34 ✓ (fname_debug.log 验证)
-    unsigned char t1 = (unsigned char)(stored ^ ((stored >> 3) & 4));
-    unsigned char v4 = (unsigned char)(t1 ^ (8 * (t1 & 4)));
-    return (unsigned char)(v4 ^ ((~((v4 >> 3) & 4)) & 0x46));
+    // CN: 精确移植 sub_143AB3640 的 8-bit 运算。
+    // 反编译中的 a1 只是写回目标参数，实际计算只依赖 a2/v65。
+    uint8_t v2 = static_cast<uint8_t>(stored ^ 0x31u);
+    v2 = static_cast<uint8_t>(v2 ^ static_cast<uint8_t>((v2 >> 1) & 0x08u));
+    v2 = static_cast<uint8_t>(v2 ^ static_cast<uint8_t>((v2 & 0x08u) << 1));
+    return static_cast<uint8_t>(v2 ^ static_cast<uint8_t>((v2 >> 1) & 0x08u));
 }
 
 inline void FNameDecrypt(char* a, int b) {
