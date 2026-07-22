@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="源文件">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="头文件">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="资源文件">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="ImGui">
+      <UniqueIdentifier>{7cdde413-2601-4a05-84b4-b4f63f122663}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="DMA">
+      <UniqueIdentifier>{a63de998-9ab9-431e-bb9c-a586cf967f5c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="core">
+      <UniqueIdentifier>{8a3f2b1c-4d5e-6f70-8a9b-0c1d2e3f4051}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="threads">
+      <UniqueIdentifier>{e1b4c3a2-5f6e-4d7c-8b9a-1d3e5f7a9b2c}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="core\Config.cpp">
+      <Filter>core</Filter>
+    </ClCompile>
+    <ClCompile Include="core\GameState.cpp">
+      <Filter>core</Filter>
+    </ClCompile>
+    <ClCompile Include="ImGui\imgui.cpp">
+      <Filter>ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="ImGui\imgui_draw.cpp">
+      <Filter>ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="ImGui\imgui_impl_dx11.cpp">
+      <Filter>ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="ImGui\imgui_impl_win32.cpp">
+      <Filter>ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="ImGui\imgui_tables.cpp">
+      <Filter>ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="ImGui\imgui_widgets.cpp">
+      <Filter>ImGui</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="main.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="GameMatrix.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Offset.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Security.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="kamivault.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="BoneEnum.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="ESPUtils.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Mem.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Overlay.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="ItemMap.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="HoloUI.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="HoloSplash.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="leechcore.h">
+      <Filter>DMA</Filter>
+    </ClInclude>
+    <ClInclude Include="vmmdll.h">
+      <Filter>DMA</Filter>
+    </ClInclude>
+    <ClInclude Include="dma_kapi.h">
+      <Filter>DMA</Filter>
+    </ClInclude>
+    <ClInclude Include="DMAKey.h">
+      <Filter>DMA</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\imconfig.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\imgui.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\imgui_impl_dx11.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\imgui_impl_win32.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\imgui_internal.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\imstb_rectpack.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\imstb_textedit.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGui\imstb_truetype.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="Font.h">
+      <Filter>ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="core\Math.h">
+      <Filter>core</Filter>
+    </ClInclude>
+    <ClInclude Include="core\Decryption.h">
+      <Filter>core</Filter>
+    </ClInclude>
+    <ClInclude Include="core\Config.h">
+      <Filter>core</Filter>
+    </ClInclude>
+    <ClInclude Include="core\PerfMonitor.h">
+      <Filter>core</Filter>
+    </ClInclude>
+    <ClInclude Include="core\PerfDraw.h">
+      <Filter>core</Filter>
+    </ClInclude>
+    <ClInclude Include="core\Runtime.h">
+      <Filter>core</Filter>
+    </ClInclude>
+    <ClInclude Include="core\GameState.h">
+      <Filter>core</Filter>
+    </ClInclude>
+    <ClInclude Include="core\MemUtils.h">
+      <Filter>core</Filter>
+    </ClInclude>
+    <ClInclude Include="core\NameResolve.h">
+      <Filter>core</Filter>
+    </ClInclude>
+    <ClInclude Include="core\ESPDraw.h">
+      <Filter>core</Filter>
+    </ClInclude>
+    <ClInclude Include="Throttler.h">
+      <Filter>threads</Filter>
+    </ClInclude>
+    <ClInclude Include="threads\ThreadCamera.h">
+      <Filter>threads</Filter>
+    </ClInclude>
+    <ClInclude Include="threads\ThreadActors.h">
+      <Filter>threads</Filter>
+    </ClInclude>
+    <ClInclude Include="threads\ThreadItems.h">
+      <Filter>threads</Filter>
+    </ClInclude>
+    <ClInclude Include="threads\ThreadNearbyItems.h">
+      <Filter>threads</Filter>
+    </ClInclude>
+    <ClInclude Include="threads\ThreadItemDecrypt.h">
+      <Filter>threads</Filter>
+    </ClInclude>
+    <ClInclude Include="threads\ThreadBoneDMA.h">
+      <Filter>threads</Filter>
+    </ClInclude>
+    <ClInclude Include="threads\ThreadBones.h">
+      <Filter>threads</Filter>
+    </ClInclude>
+    <ClInclude Include="threads\ThreadRadar.h">
+      <Filter>threads</Filter>
+    </ClInclude>
+    <ClInclude Include="threads\ThreadThreat.h">
+      <Filter>threads</Filter>
+    </ClInclude>
+    <ClInclude Include="threads\ThreadCombat.h">
+      <Filter>threads</Filter>
+    </ClInclude>
+    <ClInclude Include="threads\ThreadInfo.h">
+      <Filter>threads</Filter>
+    </ClInclude>
+    <ClInclude Include="threads\ThreadEncPlayers.h">
+      <Filter>threads</Filter>
+    </ClInclude>
+    <ClInclude Include="threads\ThreadEncItems.h">
+      <Filter>threads</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="res\bg.png">
+      <Filter>资源文件</Filter>
+    </None>
+    <None Include="FTD3XX.dll" />
+    <None Include="FTD3XX.lib" />
+    <None Include="leechcore.dll" />
+    <None Include="leechcore.lib" />
+    <None Include="vmm.dll" />
+    <None Include="vmm.lib" />
+  </ItemGroup>
+</Project>

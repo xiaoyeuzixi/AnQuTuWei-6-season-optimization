@@ -1,0 +1,33 @@
+﻿# Visual Studio / build outputs
+.vs/
+x64/
+**/Debug/
+**/Release/
+**/*.tlog/
+**/*.pdb
+**/*.ilk
+**/*.obj
+**/*.idb
+**/*.ipch
+*.exe
+*.dll
+*.lib
+
+# Local backups and generated copies
+_backup_before_optimize_*/
+**/backup/
+**/_encoding_backup_*/
+**/*.bak
+**/*.bak_*
+**/*.backup_*
+
+# Local runtime/config/log files
+global.cfg
+**/global.cfg
+*.log
+perf_thread.log
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+*.user
