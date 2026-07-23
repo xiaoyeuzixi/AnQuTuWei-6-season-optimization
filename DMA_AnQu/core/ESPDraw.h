@@ -21,6 +21,7 @@
 #include "GameState.h"
 #include "Config.h"
 #include "PerfMonitor.h"
+#include "DiagLog.h"
 #include "../ESPUtils.h"
 #include "../ItemMap.h"
 #include <vector>
@@ -188,12 +189,44 @@ inline void DrawESP() {
     const int maxDist = g_MaxDist;
     const int sw = gs.screenW, sh = gs.screenH;
 
+    // AI调试日志节流: 每~1s输出一次 (@60fps)
+    static int aiLogFrame = 0;
+    bool logAiThisFrame = (++aiLogFrame >= 60);
+    if (logAiThisFrame) aiLogFrame = 0;
+
+    // 相机诊断日志 (每~1s)
+    if (logAiThisFrame) {
+        AiDebugLog("[CAM] camLoc=(%.0f,%.0f,%.0f) camRot=(%.1f,%.1f,%.1f) fov=%.1f localPos=(%.0f,%.0f,%.0f) team=%d sw=%d sh=%d",
+                   cam.camLoc.X, cam.camLoc.Y, cam.camLoc.Z,
+                   cam.camRot.X, cam.camRot.Y, cam.camRot.Z, cam.camFov,
+                   cam.localPos.X, cam.localPos.Y, cam.localPos.Z, cam.localTeamId, sw, sh);
+    }
+
     for (auto& we : *data) {
-        if (std::isnan(we.worldBot.X) || std::isnan(we.worldBot.Y) || std::isnan(we.worldBot.Z)) continue;
-        if (we.worldBot.X == 0.f && we.worldBot.Y == 0.f && we.worldBot.Z == 0.f) continue;
-        if (!g_DrawAll && checkTeam && localTeamId > 0 && we.teamId == localTeamId) continue;
+        if (logAiThisFrame) {
+            if (we.isAI) {
+                AiDebugLog("[DRAW] AI in data: pawn=%llx team=%d mesh=%llx pos=(%.0f,%.0f,%.0f)",
+                           (unsigned long long)we.pawn, we.teamId, (unsigned long long)we.mesh,
+                           we.worldBot.X, we.worldBot.Y, we.worldBot.Z);
+            } else if (we.mesh) {
+                // 非 AI 玩家也记录, 帮助排查 "none 都绘制出来了" 的误判
+                AiDebugLog("[DRAW] Player in data: pawn=%llx team=%d mesh=%llx pos=(%.0f,%.0f,%.0f) clazz=%s",
+                           (unsigned long long)we.pawn, we.teamId, (unsigned long long)we.mesh,
+                           we.worldBot.X, we.worldBot.Y, we.worldBot.Z, we.clazz.c_str());
+            }
+        }
+        if (std::isnan(we.worldBot.X) || std::isnan(we.worldBot.Y) || std::isnan(we.worldBot.Z)) {
+            if (we.isAI) AiDebugLog("[DRAW] SKIP NaN: pawn=%llx", (unsigned long long)we.pawn);
+            continue;
+        }
+        if (we.worldBot.X == 0.f && we.worldBot.Y == 0.f && we.worldBot.Z == 0.f) {
+            if (we.isAI) AiDebugLog("[DRAW] SKIP zero pos: pawn=%llx", (unsigned long long)we.pawn);
+            continue;
+        }
+        // ★修复: AI不受队伍/队友过滤影响
+        if (!g_DrawAll && checkTeam && localTeamId > 0 && we.teamId == localTeamId && !we.isAI) continue;
         if (!g_DrawSelf && localPawn && we.pawn == localPawn) continue;
-        if (!g_DrawTeammate && localTeamId > 0 && we.teamId == localTeamId) continue;
+        if (!g_DrawTeammate && localTeamId > 0 && we.teamId == localTeamId && !we.isAI) continue;
 
         float dx = we.worldBot.X - cam.localPos.X;
         float dy = we.worldBot.Y - cam.localPos.Y;
@@ -204,25 +237,52 @@ inline void DrawESP() {
         const bool isDrawAllEntry = (g_DrawAll || !we.mesh);
         // 真人不再套用 g_MaxDist 距离裁剪，保证真人绘制距离不被限制；
         // DrawAll/非角色对象仍保留总距离限制，AI 使用下面的 g_AIMaxDist。
-        if (isDrawAllEntry && distSq > maxCm * maxCm) continue;
+        if (isDrawAllEntry && distSq > maxCm * maxCm) {
+            if (we.isAI && logAiThisFrame)
+                AiDebugLog("[DRAW] SKIP DrawAllDist: pawn=%llx dist=%dm", (unsigned long long)we.pawn, (int)(sqrtf(distSq)/100.f));
+            continue;
+        }
         int dist = (int)(sqrtf(distSq) / 100.f);
 
         FVector2D screenBot = AnQuWorldToScreen(we.worldBot, cam, sw, sh);
-        if (screenBot.X <= 0 || screenBot.Y <= 0) continue;
+        if (screenBot.X <= 0 || screenBot.Y <= 0) {
+            if (logAiThisFrame)
+                AiDebugLog("[DRAW] SKIP W2S-bot: pawn=%llx isAI=%d screen=(%.1f,%.1f) aiPos=(%.0f,%.0f,%.0f) camLoc=(%.0f,%.0f,%.0f) camRot=(%.1f,%.1f,%.1f)",
+                           (unsigned long long)we.pawn, (int)we.isAI, screenBot.X, screenBot.Y,
+                           we.worldBot.X, we.worldBot.Y, we.worldBot.Z,
+                           cam.camLoc.X, cam.camLoc.Y, cam.camLoc.Z,
+                           cam.camRot.X, cam.camRot.Y, cam.camRot.Z);
+            continue;
+        }
+        // ★优化: 跳过完全在屏幕右侧/下侧的实体 (box 在 screenTop~screenBot 之间)
+        //   screenBot.X >= sw 表示实体脚部已经超出屏幕右边界, 整个框都在屏幕外
+        if (screenBot.X > sw + 200 || screenBot.Y > sh + 200) {
+            if (logAiThisFrame && we.isAI)
+                AiDebugLog("[DRAW] SKIP offscreen: pawn=%llx screen=(%.1f,%.1f) sw=%d sh=%d",
+                           (unsigned long long)we.pawn, screenBot.X, screenBot.Y, sw, sh);
+            continue;
+        }
 
         if (isDrawAllEntry) {
+            if (we.isAI && logAiThisFrame)
+                AiDebugLog("[DRAW] AI no-mesh simple: pawn=%llx dist=%dm clazz=%s", (unsigned long long)we.pawn, dist, we.clazz.c_str());
             snprintf(buf, sizeof(buf), u8"距离:%dm %s", dist, we.clazz.c_str());
             StrokeText(dl, buf, ImVec2(screenBot.X - CalcTextWidth(buf) * 0.5f, screenBot.Y), kOutline, cText);
             continue;
         }
 
         FVector2D screenTop = AnQuWorldToScreen(we.worldTop, cam, sw, sh);
-        if (screenTop.X <= 0 || screenTop.Y <= 0) continue;
+        if (screenTop.X <= 0 || screenTop.Y <= 0) {
+            if (we.isAI && logAiThisFrame)
+                AiDebugLog("[DRAW] SKIP W2S-top: pawn=%llx screen=(%.1f,%.1f)", (unsigned long long)we.pawn, screenTop.X, screenTop.Y);
+            continue;
+        }
 
         float boxH = fabsf(screenTop.Y - screenBot.Y);
         float boxW = boxH * 0.65f;
-        float boxLeft  = screenTop.X - boxW / 2.f;
-        float boxRight = screenTop.X + boxW / 2.f;
+        const float boxCenterX = (screenTop.X + screenBot.X) * 0.5f;
+        float boxLeft  = boxCenterX - boxW / 2.f;
+        float boxRight = boxCenterX + boxW / 2.f;
 
         auto infoIt = infoMap.find(we.pawn);
         const char* nameStr = "";
@@ -233,9 +293,21 @@ inline void DrawESP() {
         }
 
         if (isLikelyAI) {
-            if (!g_DrawAI) continue;
-            if (dist > g_AIMaxDist) continue;
-            if (dist <= 2) continue;
+            if (logAiThisFrame)
+                AiDebugLog("[DRAW] AI path: pawn=%llx dist=%dm g_DrawAI=%d g_AIMaxDist=%d hasBones=%d",
+                           (unsigned long long)we.pawn, dist, (int)g_DrawAI, g_AIMaxDist, (int)we.hasBones);
+            if (!g_DrawAI) {
+                if (logAiThisFrame) AiDebugLog("[DRAW] SKIP g_DrawAI=off: pawn=%llx", (unsigned long long)we.pawn);
+                continue;
+            }
+            if (dist > g_AIMaxDist) {
+                if (logAiThisFrame) AiDebugLog("[DRAW] SKIP AI dist: pawn=%llx dist=%d > %d", (unsigned long long)we.pawn, dist, g_AIMaxDist);
+                continue;
+            }
+            if (dist <= 2) {
+                if (logAiThisFrame) AiDebugLog("[DRAW] SKIP AI too close: pawn=%llx dist=%d", (unsigned long long)we.pawn, dist);
+                continue;
+            }
             StrokeText(dl, u8"人机", ImVec2(screenTop.X - CalcTextWidth(u8"人机") * 0.5f, screenTop.Y - 18), kOutline, cAI);
             if (g_ShowBox)
                 dl->AddRect(ImVec2(boxLeft, screenTop.Y), ImVec2(boxRight, screenTop.Y + boxH), cAI, 0, 0, 1.f);
@@ -245,6 +317,8 @@ inline void DrawESP() {
             }
             if (g_ShowAISkeleton && we.hasBones)
                 DrawSkeletonLines(dl, we.worldBones, cam, sw, sh, cBone, 2.f);
+            if (logAiThisFrame)
+                AiDebugLog("[DRAW] AI OK: pawn=%llx dist=%dm screen=(%.1f,%.1f)", (unsigned long long)we.pawn, dist, screenTop.X, screenTop.Y);
             continue;
         }
 
@@ -284,6 +358,11 @@ inline void DrawESP() {
 
         if (g_ShowSkeleton && we.hasBones)
             DrawSkeletonLines(dl, we.worldBones, cam, sw, sh, cBone, 2.f);
+
+        // ★新增: 非AI玩家绘制完成日志
+        if (logAiThisFrame)
+            AiDebugLog("[DRAW] Player OK: pawn=%llx team=%d dist=%dm name='%s' screen=(%.1f,%.1f)",
+                       (unsigned long long)we.pawn, we.teamId, dist, nameStr, screenTop.X, screenTop.Y);
     }
 
     DrawRadar(dl, cam, sw, sh);

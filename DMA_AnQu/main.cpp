@@ -886,10 +886,10 @@ int main() {
     g_lang = 0;  // 默认中文
     printf("语言: 中文\n");
 
-    // 默认国际服
-    BaseWorld = BaseWorld_GL; BaseName = BaseName_GL; NameKey = NameKey_GL;
-    g_IsGL = true; ACE_CacheTable_RVA = ACE_CacheTable_RVA_GL;
-    printf("服务器: 国际服 (ACE RVA: 0x%llX)\n", (unsigned long long)ACE_CacheTable_RVA);
+    // 默认国服；国服/国际服偏移必须与目标客户端匹配。
+    BaseWorld = BaseWorld_CN; BaseName = BaseName_CN; NameKey = NameKey_CN;
+    g_IsGL = false; ACE_CacheTable_RVA = ACE_CacheTable_RVA_CN;
+    printf("服务器: 国服 (ACE RVA: 0x%llX)\n", (unsigned long long)ACE_CacheTable_RVA);
 
     // 默认复制模式
     int mode = 1;

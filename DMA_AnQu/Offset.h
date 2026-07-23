@@ -144,5 +144,5 @@ inline constexpr std::uintptr_t Offset_PlayerControllerRot    = 0x0438;  // APla
 // 运行时根据 g_IsGL 选择对应的 RVA (main.cpp 启动时赋值)
 inline std::uintptr_t ACE_CacheTable_RVA = 0xAF8A3D0;  // 默认国际服, main.cpp 中按版本切换
 inline constexpr std::uintptr_t ACE_CacheTable_RVA_GL  = 0xAF8A3D0;  // 国际服
-inline constexpr std::uintptr_t ACE_CacheTable_RVA_CN  = 0xAD9C5E0;  // 国服
+  inline constexpr std::uintptr_t ACE_CacheTable_RVA_CN  = 0xAD964F0;  // 国服
 inline constexpr uint32_t       ACE_DeadActorSentinel = 0xFF8B6D2B; // 死亡actor哨兵值

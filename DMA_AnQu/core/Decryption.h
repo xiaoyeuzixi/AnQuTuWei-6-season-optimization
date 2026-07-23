@@ -57,17 +57,38 @@ inline unsigned char GetCachedNameKey() {
     }
     return cachedKey;
 }
+/*
+char __fastcall sub_143AB3640(__int64 a1, char a2)
+{
+  char v2; // al
+  char result; // al
+
+  v2 = a2 ^ 0x31 ^ ((unsigned __int8)(a2 ^ 0x31) >> 1) & 8;
+  result = v2 ^ (2 * (v2 & 8)) ^ ((unsigned __int8)(v2 ^ (2 * (v2 & 8))) >> 1) & 8;
+  byte_14B2AC14C = result;
+  return result;
+}
+*/
 
 inline unsigned char GetXorKey() {
     unsigned char stored = GetCachedNameKey();
     if (g_IsGL) return INV_KEY[stored];
-    // CN: 精确移植 sub_143AB3640 的 8-bit 运算。
-    // 反编译中的 a1 只是写回目标参数，实际计算只依赖 a2/v65。
-    uint8_t v2 = static_cast<uint8_t>(stored ^ 0x31u);
-    v2 = static_cast<uint8_t>(v2 ^ static_cast<uint8_t>((v2 >> 1) & 0x08u));
-    v2 = static_cast<uint8_t>(v2 ^ static_cast<uint8_t>((v2 & 0x08u) << 1));
-    return static_cast<uint8_t>(v2 ^ static_cast<uint8_t>((v2 >> 1) & 0x08u));
+
+    // CN: sub_143AB3640 的逆变换，还原原始密钥（同 GL 的 INV_KEY 模式）
+    // sub_143AB3640 是双射位变换，逆变换即逐步反向异或
+    uint8_t r = stored;
+    // 逆 step3: r = u ^ ((u>>1)&8) → u = r ^ ((r>>1)&8)
+    r ^= (r >> 1) & 0x08u;
+    // 逆 step2: u = v ^ ((v&8)<<1) → v = u ^ ((u&8)<<1)
+    r ^= (r & 0x08u) << 1;
+    // 逆 step1: v = s ^ ((s>>1)&8) → s = v ^ ((v>>1)&8)
+    r ^= (r >> 1) & 0x08u;
+    // 逆 step0: s = a2 ^ 0x31 → a2 = s ^ 0x31
+    r ^= 0x31u;
+    return r;  // 0xDF → 0xEE
 }
+
+
 
 inline void FNameDecrypt(char* a, int b) {
     unsigned char xorKey = GetXorKey();

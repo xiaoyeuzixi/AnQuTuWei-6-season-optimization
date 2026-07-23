@@ -92,16 +92,23 @@ inline FVector2D AnQuWorldToScreen(const FVector& world, const CameraData& cam, 
     FVector DA = world - cam.camLoc;
     FVector vTransformed(DA.Dot(AY), DA.Dot(AZ), DA.Dot(AX));
 
-    if (vTransformed.Z < 1.f) return out;
+    // Reject invalid camera/projection inputs before dividing. A stale zero-sized
+    // swap-chain or FOV can otherwise produce huge screen offsets.
+    if (vTransformed.Z < 1.f || sw <= 0 || sh <= 0 ||
+        !std::isfinite(cam.camFov) || cam.camFov <= 1.f || cam.camFov >= 179.f) {
+        return out;
+    }
 
     // ★优化: 缓存 scale/cx/cy, fov 和屏幕尺寸不变时跳过 tanf
     static float s_cachedFov = -1.0f;
     static float s_cachedScale = 0.0f;
     static int   s_cachedSw = 0;
+    static int   s_cachedSh = 0;
     static float s_cx = 0.0f, s_cy = 0.0f;
-    if (s_cachedFov != cam.camFov || s_cachedSw != sw) {
+    if (s_cachedFov != cam.camFov || s_cachedSw != sw || s_cachedSh != sh) {
         s_cachedFov = cam.camFov;
         s_cachedSw = sw;
+        s_cachedSh = sh;
         s_cx = sw / 2.f;
         s_cy = sh / 2.f;
         s_cachedScale = s_cx / tanf(cam.camFov * 3.1415926535897932f / 360.f);
@@ -109,6 +116,7 @@ inline FVector2D AnQuWorldToScreen(const FVector& world, const CameraData& cam, 
 
     out.X = s_cx + vTransformed.X * s_cachedScale / vTransformed.Z;
     out.Y = s_cy - vTransformed.Y * s_cachedScale / vTransformed.Z;
+    if (!std::isfinite(out.X) || !std::isfinite(out.Y)) return FVector2D{};
     return out;
 }
 
