@@ -272,6 +272,31 @@ inline void DrawESP() {
         }
 
         FVector2D screenTop = AnQuWorldToScreen(we.worldTop, cam, sw, sh);
+        // Keep the two projection anchors visible in the runtime log. A constant
+        // screen-space delta points at W2S/camera state; a world-space delta points
+        // at the actor/bone source used to build the box.
+        if (logAiThisFrame && (we.isAI || we.mesh)) {
+            const float worldDx = we.worldTop.X - we.worldBot.X;
+            const float worldDy = we.worldTop.Y - we.worldBot.Y;
+            const float worldDz = we.worldTop.Z - we.worldBot.Z;
+            const float screenDx = screenTop.X - screenBot.X;
+            const float screenDy = screenTop.Y - screenBot.Y;
+            const float screenCenterX = (screenTop.X + screenBot.X) * 0.5f;
+            const float screenCenterY = (screenTop.Y + screenBot.Y) * 0.5f;
+            const float screenAnchorError = screenTop.X - screenCenterX;
+            AiDebugLog("[DRAW] BOX_GEOMETRY: pawn=%llx isAI=%d hasBones=%d "
+                       "worldBot=(%.1f,%.1f,%.1f) worldTop=(%.1f,%.1f,%.1f) "
+                       "worldDelta=(%.1f,%.1f,%.1f) screenBot=(%.1f,%.1f) "
+                       "screenTop=(%.1f,%.1f) screenDelta=(%.1f,%.1f) "
+                       "center=(%.1f,%.1f) topAnchorError=%.1f",
+                       (unsigned long long)we.pawn, (int)we.isAI, (int)we.hasBones,
+                       we.worldBot.X, we.worldBot.Y, we.worldBot.Z,
+                       we.worldTop.X, we.worldTop.Y, we.worldTop.Z,
+                       worldDx, worldDy, worldDz,
+                       screenBot.X, screenBot.Y, screenTop.X, screenTop.Y,
+                       screenDx, screenDy, screenCenterX, screenCenterY,
+                       screenAnchorError);
+        }
         if (screenTop.X <= 0 || screenTop.Y <= 0) {
             if (we.isAI && logAiThisFrame)
                 AiDebugLog("[DRAW] SKIP W2S-top: pawn=%llx screen=(%.1f,%.1f)", (unsigned long long)we.pawn, screenTop.X, screenTop.Y);
