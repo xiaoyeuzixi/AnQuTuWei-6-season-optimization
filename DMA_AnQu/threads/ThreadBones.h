@@ -106,6 +106,23 @@ inline void ThreadBones() {
                     }
                     continue;
                 }
+                // Keep the render buffer aligned with the actor-position gate.
+                // This also protects against a late encrypted-position writer
+                // publishing finite sentinels such as (1,1,1).
+                if (!std::isfinite(e.pos.X) || !std::isfinite(e.pos.Y) || !std::isfinite(e.pos.Z) ||
+                    std::abs(e.pos.Z) >= 10000.f ||
+                    (std::abs(e.pos.X) <= 10.f && std::abs(e.pos.Y) <= 10.f)) {
+                    if (e.clazz.find("AICharacter") != std::string::npos) {
+                        static uint64_t lastInvalid = 0;
+                        const uint64_t nowInvalid = GetTickCount64();
+                        if (nowInvalid - lastInvalid > 3000) {
+                            lastInvalid = nowInvalid;
+                            AiDebugLog("  [SKIP-InvalidPos] pawn=%llx cls='%s' pos=(%.1f,%.1f,%.1f)",
+                                       e.pawn, e.clazz.c_str(), e.pos.X, e.pos.Y, e.pos.Z);
+                        }
+                    }
+                    continue;
+                }
 
                 WorldEntry we{};
                 we.pawn   = e.pawn;

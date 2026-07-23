@@ -736,6 +736,112 @@ static void ThreadDiagLogger() {
     DiagShutdownFile();
 }
 
+struct ProjectionWindowSearch {
+    DWORD pid = 0;
+    HWND foreground = nullptr;
+    HWND best = nullptr;
+    long long bestScore = -1;
+};
+
+static BOOL CALLBACK FindProjectionWindowProc(HWND hwnd, LPARAM param) {
+    auto* search = reinterpret_cast<ProjectionWindowSearch*>(param);
+    if (!search || !IsWindowVisible(hwnd) || IsIconic(hwnd) || hwnd == g_OverlayHwnd)
+        return TRUE;
+
+    DWORD windowPid = 0;
+    GetWindowThreadProcessId(hwnd, &windowPid);
+    if (windowPid != search->pid || GetWindow(hwnd, GW_OWNER) != nullptr)
+        return TRUE;
+
+    RECT client{};
+    POINT origin{0, 0};
+    if (!GetClientRect(hwnd, &client) || !ClientToScreen(hwnd, &origin))
+        return TRUE;
+    const int width = client.right - client.left;
+    const int height = client.bottom - client.top;
+    if (width < 640 || height < 360)
+        return TRUE;
+
+    const long long area = static_cast<long long>(width) * height;
+    const long long foregroundBonus = hwnd == search->foreground ? (1LL << 50) : 0;
+    const long long score = foregroundBonus + area;
+    if (search->best == nullptr || score > search->bestScore) {
+        search->best = hwnd;
+        search->bestScore = score;
+    }
+    return TRUE;
+}
+
+static HWND FindProjectionWindow(DWORD pid) {
+    if (!pid) return nullptr;
+    ProjectionWindowSearch search;
+    search.pid = pid;
+    HWND foreground = GetForegroundWindow();
+    DWORD foregroundPid = 0;
+    if (foreground) GetWindowThreadProcessId(foreground, &foregroundPid);
+    if (foregroundPid == pid) search.foreground = foreground;
+    EnumWindows(FindProjectionWindowProc, reinterpret_cast<LPARAM>(&search));
+    return search.best;
+}
+
+static void UpdateProjectionViewport(const RECT& monitor) {
+    const int monitorW = monitor.right - monitor.left;
+    const int monitorH = monitor.bottom - monitor.top;
+    SetProjectionViewport(0, 0, monitorW, monitorH, false);
+
+    static HWND cachedGameWindow = nullptr;
+    static ULONGLONG nextWindowSearch = 0;
+    const ULONGLONG now = GetTickCount64();
+    if (!cachedGameWindow || !IsWindow(cachedGameWindow) || now >= nextWindowSearch) {
+        cachedGameWindow = FindProjectionWindow(mem.pid);
+        nextWindowSearch = now + 500;
+    }
+
+    int viewportLeft = 0;
+    int viewportTop = 0;
+    int viewportW = monitorW;
+    int viewportH = monitorH;
+    bool valid = false;
+    if (cachedGameWindow) {
+        RECT client{};
+        POINT origin{0, 0};
+        if (GetClientRect(cachedGameWindow, &client) &&
+            ClientToScreen(cachedGameWindow, &origin)) {
+            const int clientW = client.right - client.left;
+            const int clientH = client.bottom - client.top;
+            const bool intersectsMonitor =
+                origin.x < monitor.right && origin.x + clientW > monitor.left &&
+                origin.y < monitor.bottom && origin.y + clientH > monitor.top;
+            if (intersectsMonitor && clientW > 0 && clientH > 0) {
+                viewportLeft = origin.x - monitor.left;
+                viewportTop = origin.y - monitor.top;
+                viewportW = clientW;
+                viewportH = clientH;
+                valid = true;
+            }
+        }
+    }
+
+    static HWND lastWindow = nullptr;
+    static int lastLeft = 0, lastTop = 0, lastW = 0, lastH = 0;
+    static bool lastValid = false;
+    if (cachedGameWindow != lastWindow || viewportLeft != lastLeft || viewportTop != lastTop ||
+        viewportW != lastW || viewportH != lastH || valid != lastValid) {
+        char className[64] = {};
+        if (cachedGameWindow) GetClassNameA(cachedGameWindow, className, sizeof(className));
+        AiDebugLog("[VIEWPORT] hwnd=%p class='%s' valid=%d origin=(%d,%d) size=%dx%d monitor=%dx%d",
+                   cachedGameWindow, className, valid ? 1 : 0,
+                   viewportLeft, viewportTop, viewportW, viewportH, monitorW, monitorH);
+        lastWindow = cachedGameWindow;
+        lastLeft = viewportLeft;
+        lastTop = viewportTop;
+        lastW = viewportW;
+        lastH = viewportH;
+        lastValid = valid;
+    }
+    SetProjectionViewport(viewportLeft, viewportTop, viewportW, viewportH, valid);
+}
+
 static void Render() {
     DiagScope diag(kDiagOverlay);
     g_Perf.TickFrame();
@@ -754,28 +860,7 @@ static void Render() {
         gs.screenW = r.right - r.left;
         gs.screenH = r.bottom - r.top;
 
-        // Match W2S to the actual Unreal client area.  A windowed/bordered
-        // game otherwise leaves every projected point displaced from the
-        // full-monitor overlay by the window origin and client size.
-        SetProjectionViewport(0, 0, gs.screenW, gs.screenH, false);
-        HWND gameHwnd = FindWindowA("UnrealWindow", nullptr);
-        if (gameHwnd) {
-            RECT client{};
-            POINT clientOrigin{0, 0};
-            if (GetClientRect(gameHwnd, &client) &&
-                ClientToScreen(gameHwnd, &clientOrigin)) {
-                const int clientW = client.right - client.left;
-                const int clientH = client.bottom - client.top;
-                const bool insideMonitor =
-                    clientOrigin.x < r.right && clientOrigin.x + clientW > r.left &&
-                    clientOrigin.y < r.bottom && clientOrigin.y + clientH > r.top;
-                if (insideMonitor && clientW > 0 && clientH > 0) {
-                    SetProjectionViewport(clientOrigin.x - r.left,
-                                          clientOrigin.y - r.top,
-                                          clientW, clientH, true);
-                }
-            }
-        }
+        UpdateProjectionViewport(r);
     }
 
     // 每帧更新 DMA 键盘状态

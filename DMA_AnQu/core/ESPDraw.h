@@ -284,10 +284,17 @@ inline void DrawESP() {
             continue;
         }
 
-        float boxH = fabsf(screenTop.Y - screenBot.Y);
-        float boxW = boxH * 0.65f;
-        float boxLeft  = screenTop.X - boxW / 2.f;
-        float boxRight = screenTop.X + boxW / 2.f;
+        // Perspective makes a vertical world line move slightly in X. Use the
+        // midpoint of the projected head/feet anchors for a stable box center.
+        const float boxCenterX = (screenTop.X + screenBot.X) * 0.5f;
+        const float boxTopY = (std::min)(screenTop.Y, screenBot.Y);
+        const float boxBottomY = (std::max)(screenTop.Y, screenBot.Y);
+        const float boxH = boxBottomY - boxTopY;
+        if (!(boxH > 1.0f) || !std::isfinite(boxCenterX) || !std::isfinite(boxH))
+            continue;
+        const float boxW = boxH * 0.65f;
+        const float boxLeft  = boxCenterX - boxW / 2.f;
+        const float boxRight = boxCenterX + boxW / 2.f;
 
         auto infoIt = infoMap.find(we.pawn);
         const char* nameStr = "";
@@ -313,32 +320,32 @@ inline void DrawESP() {
                 if (logAiThisFrame) AiDebugLog("[DRAW] SKIP AI too close: pawn=%llx dist=%d", (unsigned long long)we.pawn, dist);
                 continue;
             }
-            StrokeText(dl, u8"人机", ImVec2(screenTop.X - CalcTextWidth(u8"人机") * 0.5f, screenTop.Y - 18), kOutline, cAI);
+            StrokeText(dl, u8"人机", ImVec2(boxCenterX - CalcTextWidth(u8"人机") * 0.5f, boxTopY - 18), kOutline, cAI);
             if (g_ShowBox)
-                dl->AddRect(ImVec2(boxLeft, screenTop.Y), ImVec2(boxRight, screenTop.Y + boxH), cAI, 0, 0, 1.f);
+                dl->AddRect(ImVec2(boxLeft, boxTopY), ImVec2(boxRight, boxBottomY), cAI, 0, 0, 1.f);
             if (g_ShowDistance) {
                 snprintf(buf, sizeof(buf), u8"%dm", dist);
-                StrokeText(dl, buf, ImVec2(boxRight + 5.f, screenTop.Y), kOutline, cAI);
+                StrokeText(dl, buf, ImVec2(boxRight + 5.f, boxTopY), kOutline, cAI);
             }
             if (g_ShowAISkeleton && we.hasBones)
                 DrawSkeletonLines(dl, we.worldBones, cam, sw, sh, cBone, 2.f);
             if (logAiThisFrame)
-                AiDebugLog("[DRAW] AI OK: pawn=%llx dist=%dm screen=(%.1f,%.1f)", (unsigned long long)we.pawn, dist, screenTop.X, screenTop.Y);
+                AiDebugLog("[DRAW] AI OK: pawn=%llx dist=%dm screen=(%.1f,%.1f) boxCenterX=%.1f", (unsigned long long)we.pawn, dist, screenTop.X, screenTop.Y, boxCenterX);
             continue;
         }
 
         if (dist <= 2) continue;
         if (g_ShowBox)
-            dl->AddRect(ImVec2(boxLeft, screenTop.Y), ImVec2(boxRight, screenTop.Y + boxH), cBox, 0, 0, 1.f);
+            dl->AddRect(ImVec2(boxLeft, boxTopY), ImVec2(boxRight, boxBottomY), cBox, 0, 0, 1.f);
         if (g_ShowRays) {
             const float rayX = g_ProjectionViewport.valid
                 ? g_ProjectionViewport.left + g_ProjectionViewport.width * 0.5f
                 : sw * 0.5f;
-            dl->AddLine(ImVec2(rayX, 0.f), ImVec2(screenTop.X, screenTop.Y), cRay, 2.f);
+            dl->AddLine(ImVec2(rayX, 0.f), ImVec2(boxCenterX, boxTopY), cRay, 2.f);
         }
 
         float panelX = boxRight + 5.f;
-        float panelY = screenTop.Y;
+        float panelY = boxTopY;
         if (g_ShowDistance) {
             snprintf(buf, sizeof(buf), u8"%dm", dist);
             StrokeText(dl, buf, ImVec2(panelX, panelY), kOutline, cText);
@@ -357,13 +364,13 @@ inline void DrawESP() {
             }
         }
 
-        float headY = screenTop.Y - 20;
+        float headY = boxTopY - 20;
         if (g_ShowName && nameStr[0]) {
-            StrokeText(dl, nameStr, ImVec2(screenTop.X - CalcTextWidth(nameStr) * 0.5f, headY), kOutline, cText);
+            StrokeText(dl, nameStr, ImVec2(boxCenterX - CalcTextWidth(nameStr) * 0.5f, headY), kOutline, cText);
             headY -= 16;
         }
         if (g_ShowWeapon && weaponStr[0])
-            StrokeText(dl, weaponStr, ImVec2(screenTop.X - CalcTextWidth(weaponStr) * 0.5f, headY), kOutline, cText);
+            StrokeText(dl, weaponStr, ImVec2(boxCenterX - CalcTextWidth(weaponStr) * 0.5f, headY), kOutline, cText);
 
         if (g_ShowSkeleton && we.hasBones)
             DrawSkeletonLines(dl, we.worldBones, cam, sw, sh, cBone, 2.f);
