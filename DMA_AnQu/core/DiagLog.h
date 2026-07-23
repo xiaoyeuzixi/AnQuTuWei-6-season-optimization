@@ -4,6 +4,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdio>
+#include <cstdarg>
 #include <cstdint>
 #include <mutex>
 
@@ -82,6 +83,43 @@ inline void DiagBumpError(DiagThreadId id) {
     g_DiagStats[(int)id].errors.fetch_add(1, std::memory_order_relaxed);
 }
 
+// ═══════════════════════════════════════
+//  AI 调试日志 (ai_debug.log)
+//  必须在 DiagInitFile 之前定义, 因后者调用 AiDebugInit
+// ═══════════════════════════════════════
+inline std::mutex g_AiDebugMutex;
+inline FILE* g_AiDebugFile = nullptr;
+
+inline void AiDebugInit() {
+    std::lock_guard<std::mutex> lk(g_AiDebugMutex);
+    if (g_AiDebugFile) return;
+    char modulePath[MAX_PATH] = {};
+    GetModuleFileNameA(nullptr, modulePath, MAX_PATH);
+    char* slash = strrchr(modulePath, '\\');
+    if (slash) *(slash + 1) = '\0';
+    char path[MAX_PATH];
+    snprintf(path, MAX_PATH, "%sai_debug.log", modulePath);
+    fopen_s(&g_AiDebugFile, path, "w");
+    if (g_AiDebugFile) setvbuf(g_AiDebugFile, nullptr, _IONBF, 0);
+}
+
+inline void AiDebugLog(const char* fmt, ...) {
+    std::lock_guard<std::mutex> lk(g_AiDebugMutex);
+    if (!g_AiDebugFile) return;
+    SYSTEMTIME st{};
+    GetLocalTime(&st);
+    fprintf(g_AiDebugFile, "[%02d:%02d:%02d.%03d] ", st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(g_AiDebugFile, fmt, args);
+    va_end(args);
+    fprintf(g_AiDebugFile, "\n");
+}
+
+// ═══════════════════════════════════════
+//  性能日志 (perf_thread.log)
+// ═══════════════════════════════════════
+
 inline void DiagInitFile() {
     std::lock_guard<std::mutex> lk(g_DiagFileMutex);
     if (g_DiagFile) return;
@@ -101,6 +139,9 @@ inline void DiagInitFile() {
     fprintf(g_DiagFile,
         "=== Perf Thread Log Start %04d-%02d-%02d %02d:%02d:%02d ===\n",
         st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+
+    // 同时初始化 AI 调试日志
+    AiDebugInit();
 }
 
 inline void DiagShutdownFile() {
