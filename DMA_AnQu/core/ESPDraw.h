@@ -280,9 +280,8 @@ inline void DrawESP() {
 
         float boxH = fabsf(screenTop.Y - screenBot.Y);
         float boxW = boxH * 0.65f;
-        const float boxCenterX = (screenTop.X + screenBot.X) * 0.5f;
-        float boxLeft  = boxCenterX - boxW / 2.f;
-        float boxRight = boxCenterX + boxW / 2.f;
+        float boxLeft  = screenTop.X - boxW / 2.f;
+        float boxRight = screenTop.X + boxW / 2.f;
 
         auto infoIt = infoMap.find(we.pawn);
         const char* nameStr = "";
