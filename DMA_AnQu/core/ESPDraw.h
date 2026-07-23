@@ -51,29 +51,10 @@ inline bool DrawSkeletonLines(ImDrawList* dl, const FVector* worldBones,
                               ImU32 color, float thickness) {
     if (!dl || !worldBones) return false;
     // ★优化: 14 个骨骼共享同一相机矩阵, 内联 W2S 避免重复函数调用和 tanf
-    const FMatrix& m = GetCachedRotationMatrix(cam.camRot);
-    FVector AX(m.M[0][0], m.M[0][1], m.M[0][2]);
-    FVector AY(m.M[1][0], m.M[1][1], m.M[1][2]);
-    FVector AZ(m.M[2][0], m.M[2][1], m.M[2][2]);
-
     // 缓存 scale (整个函数只算 1 次 tanf)
-    static float s_fov = -1.0f, s_scale = 0.0f;
-    static int s_sw = 0;
-    if (s_fov != cam.camFov || s_sw != sw) {
-        s_fov = cam.camFov; s_sw = sw;
-        s_scale = (sw / 2.f) / tanf(cam.camFov * 3.1415926535897932f / 360.f);
-    }
-    const float cx = sw / 2.f, cy = sh / 2.f;
-
     FVector2D b[14];
     for (int i = 0; i < 14; i++) {
-        FVector DA = worldBones[i] - cam.camLoc;
-        float z = DA.Dot(AX);
-        if (z < 1.f) { b[i] = {0, 0}; continue; }
-        float x = DA.Dot(AY);
-        float y = DA.Dot(AZ);
-        b[i].X = cx + x * s_scale / z;
-        b[i].Y = cy - y * s_scale / z;
+        b[i] = AnQuWorldToScreen(worldBones[i], cam, sw, sh);
     }
     if (b[0].X <= 0 || b[0].Y <= 0) return false;
 
@@ -349,8 +330,12 @@ inline void DrawESP() {
         if (dist <= 2) continue;
         if (g_ShowBox)
             dl->AddRect(ImVec2(boxLeft, screenTop.Y), ImVec2(boxRight, screenTop.Y + boxH), cBox, 0, 0, 1.f);
-        if (g_ShowRays)
-            dl->AddLine(ImVec2(sw / 2.f, 0.f), ImVec2(screenTop.X, screenTop.Y), cRay, 2.f);
+        if (g_ShowRays) {
+            const float rayX = g_ProjectionViewport.valid
+                ? g_ProjectionViewport.left + g_ProjectionViewport.width * 0.5f
+                : sw * 0.5f;
+            dl->AddLine(ImVec2(rayX, 0.f), ImVec2(screenTop.X, screenTop.Y), cRay, 2.f);
+        }
 
         float panelX = boxRight + 5.f;
         float panelY = screenTop.Y;
