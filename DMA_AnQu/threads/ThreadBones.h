@@ -83,15 +83,37 @@ inline void ThreadBones() {
             for (auto& e : *players) {
                 if (e.pawn == 0) continue;
                 // 鈽呰烦杩囨棤鏁堜綅缃?(NaN/0,0,0) 鈥?涓嶇敓鎴?WorldEntry, 涓嶇粯鍒?
-                if (std::isnan(e.pos.X) || std::isnan(e.pos.Y) || std::isnan(e.pos.Z)) continue;
-                if (e.pos.X == 0.f && e.pos.Y == 0.f && e.pos.Z == 0.f) continue;
+                if (std::isnan(e.pos.X) || std::isnan(e.pos.Y) || std::isnan(e.pos.Z)) {
+                    // === AI 调试: NaN 位置跳过 ===
+                    if (e.clazz.find("AICharacter") != std::string::npos) {
+                        static uint64_t lastNaN = 0;
+                        uint64_t nowMs = GetTickCount64();
+                        if (nowMs - lastNaN > 3000) { lastNaN = nowMs;
+                            AiDebugLog("  [SKIP-NaN] pawn=%llx cls='%s' pos=NaN", e.pawn, e.clazz.c_str());
+                        }
+                    }
+                    continue;
+                }
+                if (e.pos.X == 0.f && e.pos.Y == 0.f && e.pos.Z == 0.f) {
+                    // === AI 调试: 零位置跳过 (ACE解密失败) ===
+                    if (e.clazz.find("AICharacter") != std::string::npos) {
+                        static uint64_t lastZero = 0;
+                        uint64_t nowMs = GetTickCount64();
+                        if (nowMs - lastZero > 3000) { lastZero = nowMs;
+                            AiDebugLog("  [SKIP-ZeroPos] pawn=%llx cls='%s' state=%llx teamId=%d mesh=%llx",
+                                       e.pawn, e.clazz.c_str(), e.state, e.teamId, e.mesh);
+                        }
+                    }
+                    continue;
+                }
 
                 WorldEntry we{};
                 we.pawn   = e.pawn;
                 we.mesh   = e.mesh;
                 we.teamId = e.teamId;
-                we.isAI   = (e.state == 0);
+                we.isAI   = (e.clazz.find("AICharacter") != std::string::npos);
                 we.hasBones = false;
+                we.clazz  = e.clazz;  // always set clazz for diagnostics
                 // 默认兜底：ActorRoot 在角色中部，使用 ±90 构建框。
                 // 如果 BoneDMA 提供了“新鲜 root/head”，下面会用骨骼锚点覆盖，解决 ActorRoot±90 带来的偏框。
                 we.worldBot = FVector(e.pos.X, e.pos.Y, e.pos.Z - 90.f);
@@ -100,7 +122,7 @@ inline void ThreadBones() {
                 const bool wantsBones = anySkeleton && (we.isAI ? g_ShowAISkeleton : g_ShowSkeleton);
                 if (g_DrawAll || !e.mesh || !needBoneCache) {
                     // 鈽匯ootComponent 鍦ㄨ鑹蹭腑蹇? 涓婁笅鍚?90 = 鑴氬簳鍒板ご椤?
-                    we.clazz = e.clazz;
+                    // we.clazz already set above
                 } else {
                     // 有骨骼缓存：root/head 用于精准方框；worldBones 仅在开启骨骼线且缓存完整时使用。
                     // ★修复: 恢复 samePlace 检查 (阈值放宽到 800cm), 移除 fresh 时间检查
@@ -123,8 +145,13 @@ inline void ThreadBones() {
                         // Ghost boxes were caused by actorPosCache/playerPosCache fallbacks (now removed),
                         // NOT by bone cache. Active pawn cleanup + age=10 + samePlace=200cm ensure safety.
                         if (samePlace && validRoot && validHead) {
-                            we.worldBot = bc.rootPos;
-                            we.worldTop = FVector(bc.headPos.X, bc.headPos.Y, bc.headPos.Z + 15.f);
+                            // Keep the box on the verified Actor/Root XY anchor.  The
+                            // head transform can carry mesh-local rotation (or a
+                            // synthetic CTW fallback) and its XY component is not a
+                            // stable actor center, which produces a consistent lateral
+                            // box shift even when the root location is correct.
+                            we.worldBot = FVector(e.pos.X, e.pos.Y, bc.rootPos.Z);
+                            we.worldTop = FVector(e.pos.X, e.pos.Y, bc.headPos.Z + 15.f);
                         }
                         if (samePlace && validHead && wantsBones && bc.hasSkeleton) {
                             for (int i = 0; i < 14; i++) we.worldBones[i] = bc.worldBones[i];
