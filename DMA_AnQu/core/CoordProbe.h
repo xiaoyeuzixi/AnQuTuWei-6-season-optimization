@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <unordered_map>
 #include <vector>
 
 // Runtime coordinate probe. Disabled unless DMA_ANQU_COORD_PROBE=1.
@@ -15,8 +16,7 @@
 // the normal actor refresh loop without changing game state.
 inline void ProbeCoordMemory(const char* kind, DWORD64 pawn, DWORD64 root,
                              const FVector& expected, DWORD64 mesh = 0) {
-    static uint64_t lastAiProbeMs = 0;
-    static uint64_t lastPlayerProbeMs = 0;
+    static std::unordered_map<DWORD64, uint64_t> lastProbeByPawn;
     static bool enabled = false;
     static bool initialized = false;
     if (!initialized) {
@@ -25,9 +25,11 @@ inline void ProbeCoordMemory(const char* kind, DWORD64 pawn, DWORD64 root,
         initialized = true;
     }
     const uint64_t now = GetTickCount64();
-    uint64_t& lastProbeMs = (kind && kind[0] == 'A') ? lastAiProbeMs : lastPlayerProbeMs;
-    if (!enabled || (!root && !pawn && !mesh) || now - lastProbeMs < 2000) return;
-    lastProbeMs = now;
+    if (!enabled || (!root && !pawn && !mesh)) return;
+    auto lastIt = lastProbeByPawn.find(pawn);
+    if (lastIt != lastProbeByPawn.end() && now - lastIt->second < 2000) return;
+    if (lastProbeByPawn.size() > 1024) lastProbeByPawn.clear();
+    lastProbeByPawn[pawn] = now;
 
     constexpr DWORD kWindow = 0x400;
     struct Hit { const char* region; DWORD offset; FVector value; float error; };

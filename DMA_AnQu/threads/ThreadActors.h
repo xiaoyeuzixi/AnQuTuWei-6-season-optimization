@@ -350,12 +350,11 @@ inline void ThreadActors() {
                 tmpPlayers[i].pos = tmpPos[i];
             }
 
-            // Probe one valid AI/player coordinate per interval when explicitly enabled.
-            bool submittedPlayerProbe = false;
-            bool submittedAIProbe = false;
+            // Probe every tracked pawn when explicitly enabled. ProbeCoordMemory
+            // applies a per-pawn interval, so duplicate coordinates can be
+            // compared without flooding the normal refresh loop.
             for (const auto& p : tmpPlayers) {
                 const bool isAI = p.clazz.find("AICharacter") != std::string::npos;
-                if ((isAI && submittedAIProbe) || (!isAI && submittedPlayerProbe)) continue;
                 DWORD64 root = 0;
                 auto rootIt = rootCache.find(p.pawn);
                 if (rootIt != rootCache.end()) root = rootIt->second;
@@ -363,8 +362,6 @@ inline void ThreadActors() {
                 // probe its component memory so the plaintext source can be found.
                 if (!root || (!isAI && !isValidPos(p.pos))) continue;
                 ProbeCoordMemory(isAI ? "AI" : "PLAYER", p.pawn, root, p.pos, p.mesh);
-                if (isAI) submittedAIProbe = true; else submittedPlayerProbe = true;
-                if (submittedAIProbe && submittedPlayerProbe) break;
             }
 
             {
