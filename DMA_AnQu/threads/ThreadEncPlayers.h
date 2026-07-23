@@ -92,7 +92,13 @@ inline void ThreadEncPlayers() {
                        std::abs(v) > 0.01f && std::abs(v) < 500000.f;
             };
             // 鈽匷 鑼冨洿妫€鏌?(涓?ThreadActors 涓€鑷?
-            if (isCoord(p.X) && isCoord(p.Y) && isCoord(p.Z) && std::abs(p.Z) < 10000.f) {
+            // Match ThreadActors' world-position gate.  ACE decode can yield
+            // finite sentinel triples such as (1,1,1); accepting those here
+            // overwrites a valid actor position and creates a false box near
+            // the world origin.
+            const bool planar = std::abs(p.X) > 10.f || std::abs(p.Y) > 10.f;
+            if (isCoord(p.X) && isCoord(p.Y) && isCoord(p.Z) &&
+                std::abs(p.Z) < 10000.f && planar) {
                 updates[e.pawn] = p;
                 playerPosCache[e.pawn] = p;
             } else {
