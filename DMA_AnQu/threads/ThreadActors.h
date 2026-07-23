@@ -48,13 +48,7 @@ inline void ThreadActors() {
     trackedDrawAllObjects.reserve(128);
 
     auto isValidPos = [](const FVector& v) -> bool {
-        auto isCoord = [](float c) -> bool {
-            return !std::isnan(c) && !std::isinf(c) &&
-                   std::abs(c) > 0.01f && std::abs(c) < 500000.f;
-        };
-        if (!(isCoord(v.X) && isCoord(v.Y) && isCoord(v.Z) && std::abs(v.Z) < 10000.f))
-            return false;
-        return std::abs(v.X) > 10.f || std::abs(v.Y) > 10.f;
+        return IsValidCharacterPosition(v);
     };
 
     static auto lastFullScanTime = std::chrono::steady_clock::now() - std::chrono::milliseconds(100);
@@ -296,19 +290,21 @@ inline void ThreadActors() {
 
             static thread_local std::vector<DWORD64> tmpRC;
             static thread_local std::vector<FVector>  tmpPos;
-            static thread_local std::vector<int>      tmpFlags;
             static thread_local std::vector<size_t>   needRC;
             size_t n = tmpPlayers.size();
             tmpRC.assign(n, 0);
             tmpPos.assign(n, FVector{});
-            tmpFlags.assign(n, 0);
             needRC.clear();
             needRC.reserve(n);
 
             for (size_t i = 0; i < n; i++) {
+                // Refresh every tracked RootComponent with the 50ms roster scan.
+                // Between scans, reuse only a non-zero root from the last refresh.
                 auto it = rootCache.find(tmpPlayers[i].pawn);
-                if (it != rootCache.end()) tmpRC[i] = it->second;
-                else needRC.push_back(i);
+                if (!rosterRefreshed && it != rootCache.end() && it->second)
+                    tmpRC[i] = it->second;
+                else
+                    needRC.push_back(i);
             }
 
             if (!needRC.empty()) {
@@ -319,25 +315,17 @@ inline void ThreadActors() {
                         mem.AddScatter(hScatter, tmpPlayers[needRC[bi]].pawn + Offset_RootComponent, &tmpRC[needRC[bi]], 8);
                     mem.ExecuteScatter(hScatter);
                 }
-                for (size_t idx : needRC)
-                    rootCache[tmpPlayers[idx].pawn] = tmpRC[idx];
-            }
-
-            const size_t SCATTER_BATCH = 100;
-            for (size_t base = 0; base < n; base += SCATTER_BATCH) {
-                size_t end = (std::min)(base + SCATTER_BATCH, n);
-                for (size_t i = base; i < end; i++) {
-                    if (tmpRC[i]) {
-                        mem.AddScatter(hScatter, tmpRC[i] + Offset_ActorLocation, &tmpPos[i], sizeof(FVector));
-                        mem.AddScatter(hScatter, tmpRC[i] + Offset_ActorLocationFlags, &tmpFlags[i], sizeof(int));
-                    }
+                for (size_t idx : needRC) {
+                    if (tmpRC[idx])
+                        rootCache[tmpPlayers[idx].pawn] = tmpRC[idx];
+                    else
+                        rootCache.erase(tmpPlayers[idx].pawn);
                 }
-                mem.ExecuteScatter(hScatter);
             }
 
             for (size_t i = 0; i < n; i++) {
                 if (tmpRC[i]) {
-                    FVector p = ReadActorLocation(tmpRC[i], tmpPlayers[i].pawn);
+                    FVector p = ReadCharacterLocation(tmpRC[i], tmpPlayers[i].pawn);
                     if (isValidPos(p)) {
                         tmpPos[i] = p;
                         actorPosCache[tmpPlayers[i].pawn] = p;
@@ -360,7 +348,7 @@ inline void ThreadActors() {
                 if (rootIt != rootCache.end()) root = rootIt->second;
                 // AI positions can be invalid when ACE decoding is wrong; still
                 // probe its component memory so the plaintext source can be found.
-                if (!root || (!isAI && !isValidPos(p.pos))) continue;
+                if (!root) continue;
                 ProbeCoordMemory(isAI ? "AI" : "PLAYER", p.pawn, root, p.pos, p.mesh);
             }
 

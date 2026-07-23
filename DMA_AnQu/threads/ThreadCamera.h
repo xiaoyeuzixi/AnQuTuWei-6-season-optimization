@@ -78,7 +78,7 @@ inline void ThreadCamera() {
                 if (root) {
                     // RelativeLocation is ACE-protected on the CN client; the
                     // raw +0x170 bytes are not a usable local world position.
-                    localPos = ReadActorLocation(root, pawn);
+                    localPos = ReadCharacterLocation(root, pawn);
                     const bool finite = std::isfinite(localPos.X) &&
                                         std::isfinite(localPos.Y) &&
                                         std::isfinite(localPos.Z);

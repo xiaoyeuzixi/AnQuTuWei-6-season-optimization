@@ -53,41 +53,109 @@ struct ACECacheEntry {
     uint64_t data_ptr;
     uint32_t data_size;
     uint32_t seed;
+    uint64_t node;
 };
 
-inline ACECacheEntry ace_cache_lookup(uint32_t key) {
-    if (key == 0) return {0, 0, 0};
+struct ACENodeSnapshot {
+    uint64_t data_ptr;
+    uint32_t data_size;
+    uint32_t node_key;
+    uint32_t seed;
+    uint32_t reserved;
+    uint64_t next;
+};
+static_assert(sizeof(ACENodeSnapshot) == 0x20, "Unexpected ACE node layout");
 
-    // ACE cache table 的 entry 地址/seed 对同一 key 通常是稳定的。
-    // 之前每个加密物资每轮都重新遍历链表，1365 个物资时会把 DMA 读爆。
-    // 用 thread_local 缓存避免跨线程锁竞争；base 变化时自动清空。
+inline bool ace_read_node(uint64_t node, uint32_t key, ACECacheEntry& out,
+                          uint64_t* next = nullptr) {
+    ACENodeSnapshot snapshot{};
+    if (!node || !mem.Read(node + 0x10, &snapshot, sizeof(snapshot))) return false;
+    if (next) *next = snapshot.next;
+    if (snapshot.node_key != key || !snapshot.data_ptr || snapshot.data_size == 0)
+        return false;
+    out = {snapshot.data_ptr, snapshot.data_size, snapshot.seed, node};
+    return true;
+}
+
+inline ACECacheEntry ace_cache_lookup(uint32_t key) {
+    if (key == 0) return {0, 0, 0, 0};
+
+    struct CachedACENode {
+        uint64_t node = 0;
+        uint64_t refreshedAt = 0;
+    };
+    static thread_local DWORD s_cachedPid = 0;
     static thread_local uint64_t s_cachedBase = 0;
-    static thread_local std::unordered_map<uint32_t, ACECacheEntry> s_lookupCache;
-    if (s_cachedBase != gs.base) {
+    static thread_local uint64_t s_cachedWorld = 0;
+    static thread_local std::uintptr_t s_cachedRva = 0;
+    static thread_local std::unordered_map<uint32_t, CachedACENode> s_lookupCache;
+
+    // Cache only the node address. data_ptr/size/seed are live fields and seed
+    // changes whenever ACE republishes the encrypted payload.
+    if (s_cachedPid != mem.pid || s_cachedBase != gs.base ||
+        s_cachedWorld != gs.world || s_cachedRva != ACE_CacheTable_RVA) {
+        s_cachedPid = mem.pid;
         s_cachedBase = gs.base;
+        s_cachedWorld = gs.world;
+        s_cachedRva = ACE_CacheTable_RVA;
         s_lookupCache.clear();
         s_lookupCache.reserve(4096);
     }
+    const uint64_t now = GetTickCount64();
     auto cached = s_lookupCache.find(key);
-    if (cached != s_lookupCache.end()) return cached->second;
+    if (cached != s_lookupCache.end()) {
+        const uint64_t age = now - cached->second.refreshedAt;
+        if (!cached->second.node) {
+            // Dormant pooled actors often retain encrypted flags after their
+            // table nodes are gone. Avoid hammering the same empty bucket in
+            // the 2ms character loop while still detecting activation quickly.
+            if (age < 20) return {0, 0, 0, 0};
+            s_lookupCache.erase(cached);
+        } else if (age < 100) {
+            ACECacheEntry current{};
+            if (ace_read_node(cached->second.node, key, current)) return current;
+            s_lookupCache.erase(cached);
+        }
+    }
 
     uint32_t bucket = (0x9E3779B1u * key) % 0x10001u;
     uint64_t entry = mem.Read<uint64_t>(gs.base + ACE_CacheTable_RVA + (uint64_t)bucket * 8);
 
     // 遍历链表, 最多 32 次防止死循环
     for (int i = 0; i < 32 && entry; i++) {
-        uint32_t nodeKey = mem.Read<uint32_t>(entry + 0x1C);
-        if (nodeKey == key) {
-            ACECacheEntry ce;
-            ce.data_ptr  = mem.Read<uint64_t>(entry + 0x10);
-            ce.data_size = mem.Read<uint32_t>(entry + 0x18);
-            ce.seed      = mem.Read<uint32_t>(entry + 0x20);
-            s_lookupCache[key] = ce;
+        ACECacheEntry ce{};
+        uint64_t next = 0;
+        if (ace_read_node(entry, key, ce, &next)) {
+            s_lookupCache[key] = {entry, now};
             return ce;
         }
-        entry = mem.Read<uint64_t>(entry + 0x28);
+        entry = next;
     }
-    return {0, 0, 0};
+    s_lookupCache[key] = {0, now};
+    return {0, 0, 0, 0};
+}
+
+inline bool ace_read_stable_payload(uint32_t key, uint32_t requiredSize,
+                                    uint32_t dataOffset, void* output,
+                                    uint32_t outputSize, ACECacheEntry* metadata = nullptr) {
+    if (!key || !output || !outputSize) return false;
+
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        ACECacheEntry before = ace_cache_lookup(key);
+        if (!before.data_ptr || before.data_size < requiredSize ||
+            dataOffset > before.data_size || outputSize > before.data_size - dataOffset)
+            return false;
+        if (!mem.Read(before.data_ptr + dataOffset, output, outputSize)) continue;
+
+        ACECacheEntry after{};
+        if (!ace_read_node(before.node, key, after)) continue;
+        if (before.data_ptr == after.data_ptr && before.data_size == after.data_size &&
+            before.seed == after.seed) {
+            if (metadata) *metadata = before;
+            return true;
+        }
+    }
+    return false;
 }
 
 inline FVector ace_decrypt_relative_location_with_ctl(uint64_t component, uint32_t ctl) {
@@ -101,12 +169,13 @@ inline FVector ace_decrypt_relative_location_with_ctl(uint64_t component, uint32
     }
     if (key == 0) return {0, 0, 0};
 
-    ACECacheEntry ce = ace_cache_lookup(key);
-    if (!ce.data_ptr || ce.data_size < 12) return {0, 0, 0};
-
-    uint32_t d0 = mem.Read<uint32_t>(ce.data_ptr + 0);
-    uint32_t d1 = mem.Read<uint32_t>(ce.data_ptr + 4);
-    uint32_t d2 = mem.Read<uint32_t>(ce.data_ptr + 8);
+    ACECacheEntry ce{};
+    uint32_t encrypted[3]{};
+    if (!ace_read_stable_payload(key, 12, 0, encrypted, sizeof(encrypted), &ce))
+        return {0, 0, 0};
+    uint32_t d0 = encrypted[0];
+    uint32_t d1 = encrypted[1];
+    uint32_t d2 = encrypted[2];
 
     uint32_t v12 = 0x9E3779B1u * key;
     uint32_t v16 = 0x3C6EF372u;
@@ -147,14 +216,15 @@ inline FVector ace_decrypt_c2w_translation(uint64_t component) {
     }
     if (key == 0) return {0, 0, 0};
 
-    // Cache 查找
-    ACECacheEntry ce = ace_cache_lookup(key);
-    if (!ce.data_ptr || ce.data_size < 48) return {0, 0, 0};
-
-    // 读取 translation 的 3 个加密 DWORDs (index 4,5,6)
-    uint32_t d4 = mem.Read<uint32_t>(ce.data_ptr + 16);
-    uint32_t d5 = mem.Read<uint32_t>(ce.data_ptr + 20);
-    uint32_t d6 = mem.Read<uint32_t>(ce.data_ptr + 24);
+    // Read the encrypted translation and verify that the live tuple did not
+    // change during the DMA read.
+    ACECacheEntry ce{};
+    uint32_t encrypted[3]{};
+    if (!ace_read_stable_payload(key, 48, 16, encrypted, sizeof(encrypted), &ce))
+        return {0, 0, 0};
+    uint32_t d4 = encrypted[0];
+    uint32_t d5 = encrypted[1];
+    uint32_t d6 = encrypted[2];
 
     // XOR stream, 跳过前4个DWORD到达 translation
     uint32_t v12 = 0x9E3779B1u * key;

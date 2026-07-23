@@ -89,6 +89,31 @@ inline void ProbeCoordMemory(const char* kind, DWORD64 pawn, DWORD64 root,
         AiDebugLog("[COORD_PROBE] root_offsets +150=(%.1f,%.1f,%.1f) +170=(%.1f,%.1f,%.1f) +230=(%.1f,%.1f,%.1f) flags17c=0x%08X flags250=0x%08X",
                    v150.X, v150.Y, v150.Z, v170.X, v170.Y, v170.Z,
                    v230.X, v230.Y, v230.Z, (unsigned)flags, (unsigned)ctwFlags);
+        const FVector decodedRl = ace_decrypt_relative_location_with_ctl(root, (uint32_t)flags);
+        const FVector decodedRootCtw = ace_decrypt_c2w_translation(root);
+        const FVector decodedMeshCtw = mesh ? ace_decrypt_c2w_translation(mesh) : FVector{};
+        AiDebugLog("[COORD_PROBE] decoded rl=(%.1f,%.1f,%.1f) rootCtw=(%.1f,%.1f,%.1f) meshCtw=(%.1f,%.1f,%.1f)",
+                   decodedRl.X, decodedRl.Y, decodedRl.Z,
+                   decodedRootCtw.X, decodedRootCtw.Y, decodedRootCtw.Z,
+                   decodedMeshCtw.X, decodedMeshCtw.Y, decodedMeshCtw.Z);
+        auto logAceMetadata = [&](const char* source, uint32_t ctl) {
+            const uint32_t algo = ctl >> 29;
+            const uint32_t key = ctl & 0x1FFFFFF;
+            const uint32_t bucket = key ? (0x9E3779B1u * key) % 0x10001u : 0;
+            ACECacheEntry entry{};
+            if (algo != 0 && key) entry = ace_cache_lookup(key);
+            AiDebugLog("[COORD_PROBE] ace source=%s algo=%u key=0x%07X bucket=%u node=%llx data=%llx size=%u seed=0x%08X",
+                       source, algo, key, bucket,
+                       (unsigned long long)entry.node,
+                       (unsigned long long)entry.data_ptr,
+                       entry.data_size, entry.seed);
+        };
+        logAceMetadata("rl", (uint32_t)flags);
+        logAceMetadata("rootCtw", (uint32_t)ctwFlags);
+        if (mesh) {
+            const uint32_t meshCtwFlags = mem.Read<uint32_t>(mesh + Offset_RootComponentToWorldFlags);
+            logAceMetadata("meshCtw", meshCtwFlags);
+        }
     }
     const size_t limit = (std::min)(hits.size(), size_t(16));
     for (size_t i = 0; i < limit; ++i) {

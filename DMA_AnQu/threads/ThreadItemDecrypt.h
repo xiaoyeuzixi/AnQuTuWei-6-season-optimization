@@ -56,12 +56,13 @@ inline bool ItemDecTryRelativeKnownFlags(DWORD64 root, uint32_t flags, FVector& 
     }
     if (key == 0) return false;
 
-    ACECacheEntry ce = ace_cache_lookup(key);
-    if (!ce.data_ptr || ce.data_size < 12) return false;
-
-    uint32_t d0 = mem.Read<uint32_t>(ce.data_ptr + 0);
-    uint32_t d1 = mem.Read<uint32_t>(ce.data_ptr + 4);
-    uint32_t d2 = mem.Read<uint32_t>(ce.data_ptr + 8);
+    ACECacheEntry ce{};
+    uint32_t encrypted[3]{};
+    if (!ace_read_stable_payload(key, 12, 0, encrypted, sizeof(encrypted), &ce))
+        return false;
+    uint32_t d0 = encrypted[0];
+    uint32_t d1 = encrypted[1];
+    uint32_t d2 = encrypted[2];
 
     uint32_t v12 = 0x9E3779B1u * key;
     uint32_t v16 = 0x3C6EF372u;
@@ -91,12 +92,13 @@ inline bool ItemDecTryC2W(DWORD64 root, FVector& out) {
     }
     if (key == 0) return false;
 
-    ACECacheEntry ce = ace_cache_lookup(key);
-    if (!ce.data_ptr || ce.data_size < 48) return false;
-
-    uint32_t d4 = mem.Read<uint32_t>(ce.data_ptr + 16);
-    uint32_t d5 = mem.Read<uint32_t>(ce.data_ptr + 20);
-    uint32_t d6 = mem.Read<uint32_t>(ce.data_ptr + 24);
+    ACECacheEntry ce{};
+    uint32_t encrypted[3]{};
+    if (!ace_read_stable_payload(key, 48, 16, encrypted, sizeof(encrypted), &ce))
+        return false;
+    uint32_t d4 = encrypted[0];
+    uint32_t d5 = encrypted[1];
+    uint32_t d6 = encrypted[2];
 
     uint32_t v12 = 0x9E3779B1u * key;
     uint32_t STEP = 0x78DDE6E4u;

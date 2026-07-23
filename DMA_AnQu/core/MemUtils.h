@@ -122,6 +122,55 @@ inline bool IsBaseValid() {
 //  3. Root CTW (encType!=0): 回退到 Mesh ComponentToWorld
 //  4. 全部加密: 返回零向量
 // ═══════════════════════════════════════
+inline bool IsCharacterPositionSentinel(const FVector& p) {
+    auto isTriplet = [&](float value) {
+        constexpr float epsilon = 0.01f;
+        return std::abs(p.X - value) < epsilon &&
+               std::abs(p.Y - value) < epsilon &&
+               std::abs(p.Z - value) < epsilon;
+    };
+    return isTriplet(1.f) || isTriplet(-1.f) ||
+           isTriplet(100.f) || isTriplet(-100.f) ||
+           isTriplet(1000.f) || isTriplet(-1000.f);
+}
+
+inline bool IsValidCharacterPosition(const FVector& p) {
+    if (!std::isfinite(p.X) || !std::isfinite(p.Y) || !std::isfinite(p.Z))
+        return false;
+    if (std::abs(p.X) >= 500000.f || std::abs(p.Y) >= 500000.f ||
+        std::abs(p.Z) >= 10000.f)
+        return false;
+    if (std::abs(p.X) <= 10.f && std::abs(p.Y) <= 10.f)
+        return false;
+    return !IsCharacterPositionSentinel(p);
+}
+
+// Character-only path. ComponentToWorld is world space; RelativeLocation and
+// generic item/effect fallbacks are not reliable box anchors for attached or
+// pooled character components.
+inline FVector ReadCharacterLocation(DWORD64 rootComp, DWORD64 actorPtr = 0) {
+    if (!rootComp) return {};
+
+    FVector rootWorld = ace_decrypt_c2w_translation(rootComp);
+    if (IsValidCharacterPosition(rootWorld)) return rootWorld;
+
+    if (actorPtr) {
+        DWORD64 mesh = mem.Read<DWORD64>(actorPtr + Offset_ActorMesh);
+        if (mesh) {
+            FVector meshWorld = ace_decrypt_c2w_translation(mesh);
+            if (IsValidCharacterPosition(meshWorld)) {
+                // Mesh origin is one capsule half-height below RootComponent.
+                meshWorld.Z += 90.f;
+                if (IsValidCharacterPosition(meshWorld)) return meshWorld;
+            }
+        }
+    }
+
+    FVector relative = ace_decrypt_relative_location(rootComp);
+    if (IsValidCharacterPosition(relative)) return relative;
+    return {};
+}
+
 inline FVector ReadActorLocation(DWORD64 rootComp, DWORD64 actorPtr = 0) {
     if (!rootComp) return {};
 

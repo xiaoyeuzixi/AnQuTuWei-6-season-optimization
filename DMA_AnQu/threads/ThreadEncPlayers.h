@@ -86,19 +86,13 @@ inline void ThreadEncPlayers() {
             if (rlEnc == 0) continue; // 鏄庢枃, ThreadActors 宸插鐞?
 
             // 鍔犲瘑: 鐢?ReadActorLocation 鍥為€€
-            FVector p = ReadActorLocation(tmpRoots[idx], e.pawn);
-            auto isCoord = [](float v) -> bool {
-                return !std::isnan(v) && !std::isinf(v) &&
-                       std::abs(v) > 0.01f && std::abs(v) < 500000.f;
-            };
+            FVector p = ReadCharacterLocation(tmpRoots[idx], e.pawn);
             // 鈽匷 鑼冨洿妫€鏌?(涓?ThreadActors 涓€鑷?
             // Match ThreadActors' world-position gate.  ACE decode can yield
             // finite sentinel triples such as (1,1,1); accepting those here
             // overwrites a valid actor position and creates a false box near
             // the world origin.
-            const bool planar = std::abs(p.X) > 10.f || std::abs(p.Y) > 10.f;
-            if (isCoord(p.X) && isCoord(p.Y) && isCoord(p.Z) &&
-                std::abs(p.Z) < 10000.f && planar) {
+            if (IsValidCharacterPosition(p)) {
                 updates[e.pawn] = p;
                 playerPosCache[e.pawn] = p;
             } else {
