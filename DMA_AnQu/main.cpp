@@ -792,7 +792,9 @@ static void UpdateProjectionViewport(const RECT& monitor) {
     static HWND cachedGameWindow = nullptr;
     static ULONGLONG nextWindowSearch = 0;
     const ULONGLONG now = GetTickCount64();
-    if (!cachedGameWindow || !IsWindow(cachedGameWindow) || now >= nextWindowSearch) {
+    const bool cachedWindowInvalid = cachedGameWindow &&
+        (!IsWindow(cachedGameWindow) || !IsWindowVisible(cachedGameWindow));
+    if (now >= nextWindowSearch || cachedWindowInvalid) {
         cachedGameWindow = FindProjectionWindow(mem.pid);
         nextWindowSearch = now + 500;
     }
