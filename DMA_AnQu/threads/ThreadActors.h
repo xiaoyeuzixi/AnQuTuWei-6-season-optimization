@@ -54,7 +54,7 @@ inline void ThreadActors() {
         };
         if (!(isCoord(v.X) && isCoord(v.Y) && isCoord(v.Z) && std::abs(v.Z) < 10000.f))
             return false;
-        return std::abs(v.X) > 10.f || std::abs(v.Y) > 10.f || std::abs(v.Z) > 10.f;
+        return std::abs(v.X) > 10.f || std::abs(v.Y) > 10.f;
     };
 
     static auto lastFullScanTime = std::chrono::steady_clock::now() - std::chrono::milliseconds(100);

@@ -28,6 +28,28 @@ struct CameraData {
     int        localTeamId;
 };
 
+// The overlay may cover a full monitor while the game renders into a client
+// area that starts below a title bar or at a non-zero desktop coordinate.
+// Keep that mapping separate from the camera math so fullscreen still uses the
+// zero-offset fast path.
+struct ProjectionViewport {
+    int left = 0;
+    int top = 0;
+    int width = 0;
+    int height = 0;
+    bool valid = false;
+};
+
+inline ProjectionViewport g_ProjectionViewport;
+
+inline void SetProjectionViewport(int left, int top, int width, int height, bool valid) {
+    g_ProjectionViewport.left = left;
+    g_ProjectionViewport.top = top;
+    g_ProjectionViewport.width = width;
+    g_ProjectionViewport.height = height;
+    g_ProjectionViewport.valid = valid && width > 0 && height > 0;
+}
+
 // ═══════════════════════════════════════
 //  CachedCameraMatrix — 旋转矩阵缓存
 //  避免每帧重复计算相同 camRot 的旋转矩阵
@@ -94,7 +116,11 @@ inline FVector2D AnQuWorldToScreen(const FVector& world, const CameraData& cam, 
 
     // Reject invalid camera/projection inputs before dividing. A stale zero-sized
     // swap-chain or FOV can otherwise produce huge screen offsets.
-    if (vTransformed.Z < 1.f || sw <= 0 || sh <= 0 ||
+    const int viewportW = g_ProjectionViewport.valid ? g_ProjectionViewport.width : sw;
+    const int viewportH = g_ProjectionViewport.valid ? g_ProjectionViewport.height : sh;
+    const int viewportLeft = g_ProjectionViewport.valid ? g_ProjectionViewport.left : 0;
+    const int viewportTop = g_ProjectionViewport.valid ? g_ProjectionViewport.top : 0;
+    if (vTransformed.Z < 1.f || viewportW <= 0 || viewportH <= 0 ||
         !std::isfinite(cam.camFov) || cam.camFov <= 1.f || cam.camFov >= 179.f) {
         return out;
     }
@@ -105,17 +131,17 @@ inline FVector2D AnQuWorldToScreen(const FVector& world, const CameraData& cam, 
     static int   s_cachedSw = 0;
     static int   s_cachedSh = 0;
     static float s_cx = 0.0f, s_cy = 0.0f;
-    if (s_cachedFov != cam.camFov || s_cachedSw != sw || s_cachedSh != sh) {
+    if (s_cachedFov != cam.camFov || s_cachedSw != viewportW || s_cachedSh != viewportH) {
         s_cachedFov = cam.camFov;
-        s_cachedSw = sw;
-        s_cachedSh = sh;
-        s_cx = sw / 2.f;
-        s_cy = sh / 2.f;
+        s_cachedSw = viewportW;
+        s_cachedSh = viewportH;
+        s_cx = viewportW / 2.f;
+        s_cy = viewportH / 2.f;
         s_cachedScale = s_cx / tanf(cam.camFov * 3.1415926535897932f / 360.f);
     }
 
-    out.X = s_cx + vTransformed.X * s_cachedScale / vTransformed.Z;
-    out.Y = s_cy - vTransformed.Y * s_cachedScale / vTransformed.Z;
+    out.X = viewportLeft + s_cx + vTransformed.X * s_cachedScale / vTransformed.Z;
+    out.Y = viewportTop + s_cy - vTransformed.Y * s_cachedScale / vTransformed.Z;
     if (!std::isfinite(out.X) || !std::isfinite(out.Y)) return FVector2D{};
     return out;
 }

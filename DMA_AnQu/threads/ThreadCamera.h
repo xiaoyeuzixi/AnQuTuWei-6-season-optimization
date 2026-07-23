@@ -73,9 +73,20 @@ inline void ThreadCamera() {
             mem.AddScatter(hScatter, pawn + Offset_PlayerState, &st, 8);
             mem.ExecuteScatter(hScatter);
             if (root || st) {
-                if (root) mem.AddScatter(hScatter, root + Offset_ActorLocation, &localPos, sizeof(FVector));
                 if (st)   mem.AddScatter(hScatter, st + Offset_TeamId, &teamId, 4);
                 mem.ExecuteScatter(hScatter);
+                if (root) {
+                    // RelativeLocation is ACE-protected on the CN client; the
+                    // raw +0x170 bytes are not a usable local world position.
+                    localPos = ReadActorLocation(root, pawn);
+                    const bool finite = std::isfinite(localPos.X) &&
+                                        std::isfinite(localPos.Y) &&
+                                        std::isfinite(localPos.Z);
+                    const bool planar = std::abs(localPos.X) > 10.f ||
+                                        std::abs(localPos.Y) > 10.f;
+                    if (!finite || !planar)
+                        localPos = camCache.loc;
+                }
                 if (st) g_LocalTeamId = teamId;
             }
         }

@@ -753,6 +753,29 @@ static void Render() {
         RECT r = GetCachedMonitorRect(g_CurMonitor);
         gs.screenW = r.right - r.left;
         gs.screenH = r.bottom - r.top;
+
+        // Match W2S to the actual Unreal client area.  A windowed/bordered
+        // game otherwise leaves every projected point displaced from the
+        // full-monitor overlay by the window origin and client size.
+        SetProjectionViewport(0, 0, gs.screenW, gs.screenH, false);
+        HWND gameHwnd = FindWindowA("UnrealWindow", nullptr);
+        if (gameHwnd) {
+            RECT client{};
+            POINT clientOrigin{0, 0};
+            if (GetClientRect(gameHwnd, &client) &&
+                ClientToScreen(gameHwnd, &clientOrigin)) {
+                const int clientW = client.right - client.left;
+                const int clientH = client.bottom - client.top;
+                const bool insideMonitor =
+                    clientOrigin.x < r.right && clientOrigin.x + clientW > r.left &&
+                    clientOrigin.y < r.bottom && clientOrigin.y + clientH > r.top;
+                if (insideMonitor && clientW > 0 && clientH > 0) {
+                    SetProjectionViewport(clientOrigin.x - r.left,
+                                          clientOrigin.y - r.top,
+                                          clientW, clientH, true);
+                }
+            }
+        }
     }
 
     // 每帧更新 DMA 键盘状态

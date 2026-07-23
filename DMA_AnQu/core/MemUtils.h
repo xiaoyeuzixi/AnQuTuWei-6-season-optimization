@@ -131,13 +131,17 @@ inline FVector ReadActorLocation(DWORD64 rootComp, DWORD64 actorPtr = 0) {
         return !std::isnan(v) && !std::isinf(v) &&
                std::abs(v) > 0.01f && std::abs(v) < 500000.f;
     };
-    if (isCoord(acePos.X) && isCoord(acePos.Y) && isCoord(acePos.Z) && std::abs(acePos.Z) < 10000.f) {
+    if (isCoord(acePos.X) && isCoord(acePos.Y) && isCoord(acePos.Z) &&
+        std::abs(acePos.Z) < 10000.f &&
+        (std::abs(acePos.X) > 10.f || std::abs(acePos.Y) > 10.f)) {
         return acePos;
     }
 
     // 2. ★ACE 解密 RootComponent 的 ComponentToWorld translation
     FVector ctwPos = ace_decrypt_c2w_translation(rootComp);
-    if (isCoord(ctwPos.X) && isCoord(ctwPos.Y) && isCoord(ctwPos.Z) && std::abs(ctwPos.Z) < 10000.f) {
+    if (isCoord(ctwPos.X) && isCoord(ctwPos.Y) && isCoord(ctwPos.Z) &&
+        std::abs(ctwPos.Z) < 10000.f &&
+        (std::abs(ctwPos.X) > 10.f || std::abs(ctwPos.Y) > 10.f)) {
         return ctwPos;
     }
 
