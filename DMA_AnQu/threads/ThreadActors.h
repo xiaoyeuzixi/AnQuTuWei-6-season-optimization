@@ -8,6 +8,7 @@
 #include "../core/MemUtils.h"
 #include "../core/NameResolve.h"
 #include "../core/DiagLog.h"
+#include "../core/CoordProbe.h"
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
@@ -51,8 +52,9 @@ inline void ThreadActors() {
             return !std::isnan(c) && !std::isinf(c) &&
                    std::abs(c) > 0.01f && std::abs(c) < 500000.f;
         };
-        return isCoord(v.X) && isCoord(v.Y) && isCoord(v.Z) &&
-               std::abs(v.Z) < 10000.f;
+        if (!(isCoord(v.X) && isCoord(v.Y) && isCoord(v.Z) && std::abs(v.Z) < 10000.f))
+            return false;
+        return std::abs(v.X) > 10.f || std::abs(v.Y) > 10.f || std::abs(v.Z) > 10.f;
     };
 
     static auto lastFullScanTime = std::chrono::steady_clock::now() - std::chrono::milliseconds(100);
@@ -190,6 +192,31 @@ inline void ThreadActors() {
                     }
                 }
 
+                // === AI 调试日志: 必须在 std::move 之前记录, 否则 className 被 move 走后 cls='' ===
+                {
+                    static uint64_t lastAiLog = 0;
+                    uint64_t nowMs2 = GetTickCount64();
+                    if (nowMs2 - lastAiLog > 3000) {
+                        lastAiLog = nowMs2;
+                        // 先计算 tracked 数量 (与下面的过滤逻辑一致)
+                        int trackedCount = 0;
+                        for (auto& c : scannedCharacters) {
+                            if (!(!c.state && c.className.find("AICharacter") == std::string::npos))
+                                trackedCount++;
+                        }
+                        AiDebugLog("=== ThreadActors scan: %d scanned, %d tracked ===",
+                                   (int)scannedCharacters.size(), trackedCount);
+                        for (size_t i = 0; i < scannedCharacters.size(); i++) {
+                            auto& c = scannedCharacters[i];
+                            bool isAI = (c.className.find("AICharacter") != std::string::npos);
+                            // tracked 判定与下面 trackedCharacters 构建逻辑一致
+                            bool tracked = !(!c.state && c.className.find("AICharacter") == std::string::npos);
+                            AiDebugLog("  [%d] pawn=%llx cls='%s' isAI=%d state=%llx teamId=%d mesh=%llx tracked=%d",
+                                       (int)i, c.pawn, c.className.c_str(), isAI, c.state, c.teamId, c.mesh, tracked);
+                        }
+                    }
+                }
+
                 trackedCharacters.clear();
                 trackedCharacters.reserve(scannedCharacters.size());
                 for (auto& c : scannedCharacters) {
@@ -309,8 +336,7 @@ inline void ThreadActors() {
             }
 
             for (size_t i = 0; i < n; i++) {
-                int enc = tmpRC[i] ? ((unsigned int)tmpFlags[i] >> 29) : -1;
-                if (tmpRC[i] && enc != 0) {
+                if (tmpRC[i]) {
                     FVector p = ReadActorLocation(tmpRC[i], tmpPlayers[i].pawn);
                     if (isValidPos(p)) {
                         tmpPos[i] = p;
@@ -322,6 +348,23 @@ inline void ThreadActors() {
                     }
                 }
                 tmpPlayers[i].pos = tmpPos[i];
+            }
+
+            // Probe one valid AI/player coordinate per interval when explicitly enabled.
+            bool submittedPlayerProbe = false;
+            bool submittedAIProbe = false;
+            for (const auto& p : tmpPlayers) {
+                const bool isAI = p.clazz.find("AICharacter") != std::string::npos;
+                if ((isAI && submittedAIProbe) || (!isAI && submittedPlayerProbe)) continue;
+                DWORD64 root = 0;
+                auto rootIt = rootCache.find(p.pawn);
+                if (rootIt != rootCache.end()) root = rootIt->second;
+                // AI positions can be invalid when ACE decoding is wrong; still
+                // probe its component memory so the plaintext source can be found.
+                if (!root || (!isAI && !isValidPos(p.pos))) continue;
+                ProbeCoordMemory(isAI ? "AI" : "PLAYER", p.pawn, root, p.pos, p.mesh);
+                if (isAI) submittedAIProbe = true; else submittedPlayerProbe = true;
+                if (submittedAIProbe && submittedPlayerProbe) break;
             }
 
             {
