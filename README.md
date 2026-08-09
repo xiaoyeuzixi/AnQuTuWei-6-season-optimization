@@ -1,12 +1,21 @@
-﻿# DMA_AnQu
+﻿# UAGame.exe_DMA | 安全区第 6 赛季优化版
 
-这是一个 Visual Studio 2022 / C++17 / x64 Windows 工程，包含：
+> ## 交流群：835775657
+> 欢迎加入交流群，获取版本更新、问题交流与使用反馈。
+
+面向 `UAGame.exe` 的 DMA 读取工程，基于 Visual Studio 2022 / C++17 / x64 Windows 构建。本版本针对安全区第 6 赛季进行更新与发布优化，包含：
 
 - DX11 + Dear ImGui Overlay
 - 多线程数据采集与渲染
 - DMA/VMM/LeechCore/FTDI 依赖
 - `core/` 状态、配置、解密和性能模块
 - `threads/` 相机、Actor、骨骼、物资、雷达等线程模块
+
+## 主要内容
+
+- 面向 `UAGame.exe` 的进程定位与 DMA 读取流程
+- 针对安全区第 6 赛季的偏移、状态与性能优化
+- DX11 + Dear ImGui 的可视化与交互界面
 
 ## 构建
 
@@ -26,4 +35,3 @@
 主分支为 `main`。每次修改请使用独立提交，必要时通过 `git revert` 回滚。
 
 
-交流群：835775657
